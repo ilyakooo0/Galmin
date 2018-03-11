@@ -8,6 +8,53 @@
 
 import Foundation
 
+#if os(Linux)
+    import Glibc
+    
+    // Use fopen/fwrite to output string
+    func writeStringToFile(string: String, path: String) -> Bool {
+        let fp = fopen(path, "w"); defer { fclose(fp) }
+        let byteArray = Array(string.utf8)
+        let count = fwrite(byteArray, 1, byteArray.count, fp)
+        return count == string.utf8.count
+    }
+    
+    // Use fread to input string
+    func readStringFromFile(path: String) -> String {
+        let fp = fopen(path, "r"); defer { fclose(fp) }
+        var outputString = ""
+        let chunkSize = 1024
+        let buffer: UnsafeMutablePointer<CChar> = UnsafeMutablePointer.allocate(capacity: chunkSize)
+        defer { buffer.deallocate(capacity: chunkSize) }
+        repeat {
+            let count: Int = fread(buffer, 1, chunkSize, fp)
+            guard ferror(fp) == 0 else { break }
+            if count > 0 {
+                let ptr = unsafeBitCast(buffer, to: UnsafePointer<CChar>.self)
+                if let newString = String(validatingUTF8: ptr) {
+                    outputString += newString
+                }
+            }
+        } while feof(fp) == 0
+        
+        return outputString
+    }
+    
+    extension String {
+        func write(with name: String) throws {
+            if !writeStringToFile(string: self, path: "diskraDz3/\(name)") {
+                print("Couldn't write files ¯\\_(ツ)_/¯")
+            }
+        }
+    }
+#else
+    private extension String {
+        func write(with name: String) throws {
+            try self.write(toFile: "diskraDz3/\(name)", atomically: true, encoding: .utf8)
+        }
+    }
+#endif
+
 private extension String {
     var sub: String {
         return self.map { c in
@@ -112,7 +159,7 @@ class Printer<Vertex> where Vertex: Hashable & Comparable {
     
     func processInitialMinimization(minimization: Graph<Vertex>.Minimization, counter: Int) -> () {
         do {
-            try FileManager.default.createDirectory(atPath: "diskraDz3", withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(atPath: "diskraDz3", withIntermediateDirectories: false)
             FileManager.default.createFile(atPath: "diskraDz3/solutions.txt", contents: nil)
             solutions = FileHandle(forWritingAtPath: "diskraDz3/solutions.txt")
             try table(for: minimization.before, with: minimization.reductions, prefix: "", coef: false).write(with: "\(counter)_1.csv")
@@ -206,8 +253,4 @@ extension Tree {
     }
 }
 
-private extension String {
-    func write(with name: String) throws {
-        try self.write(toFile: "diskraDz3/\(name)", atomically: true, encoding: .utf8)
-    }
-}
+
